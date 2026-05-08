@@ -1,0 +1,31 @@
+name: enruta_app
+description: Transporte en tiempo real para zonas rurales de Bolivia
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Firebase
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  firebase_database: ^11.1.4
+  google_maps_flutter: ^2.9.0
+  geolocator: ^13.0.1
+
+  # Manejo de estado
+  provider: ^6.1.1
+
+  # Utilidades
+  permission_handler: ^11.0.1
+  intl: ^0.18.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

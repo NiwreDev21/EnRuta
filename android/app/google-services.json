@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "525047488380",
+    "firebase_url": "https://enruta-app-74653-default-rtdb.firebaseio.com",
+    "project_id": "enruta-app-74653",
+    "storage_bucket": "enruta-app-74653.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:525047488380:android:de7b4dff12b4e0ab40cef9",
+        "android_client_info": {
+          "package_name": "com.example.enruta_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdCQ7wCECV9AxshDBnqPdnjCownXoDyWQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
