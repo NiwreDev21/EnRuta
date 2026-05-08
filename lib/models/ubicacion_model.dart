@@ -16,7 +16,6 @@ class UbicacionModel {
       'timestamp': timestamp.millisecondsSinceEpoch,
     };
   }
-
   factory UbicacionModel.fromMap(Map<String, dynamic> map) {
     return UbicacionModel(
       latitud: (map['lat'] as num? ?? 0.0).toDouble(),   // ✅ cast seguro

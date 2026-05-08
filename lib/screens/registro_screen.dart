@@ -3,235 +3,142 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 
 class RegistroScreen extends StatefulWidget {
+  const RegistroScreen({super.key});
+
   @override
-  _RegistroScreenState createState() => _RegistroScreenState();
+  State<RegistroScreen> createState() => _RegistroScreenState();
 }
 
 class _RegistroScreenState extends State<RegistroScreen> {
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-  final TextEditingController nombreController = TextEditingController();
-  String rolSeleccionado = 'pasajero';
-  bool _isLoading = false;
-  String? _errorMessage;
+  final _nombreController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  String _rolSeleccionado = 'pasajero';
+  bool _cargando = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _registrar() async {
+    if (_nombreController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _passwordController.text.trim().isEmpty) {
+      setState(() => _error = 'Completa todos los campos');
+      return;
+    }
+
+    setState(() { _cargando = true; _error = null; });
+
+    final auth = context.read<AuthProvider>();
+    final exito = await auth.register(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+      _nombreController.text.trim(),
+      _rolSeleccionado,
+    );
+
+    if (!mounted) return;
+
+    if (exito) {
+      if (_rolSeleccionado == 'chofer') {
+        Navigator.pushReplacementNamed(context, '/chofer');
+      } else {
+        Navigator.pushReplacementNamed(context, '/pasajero');
+      }
+    } else {
+      setState(() {
+        _error = 'Error al registrar. Intenta con otro correo.';
+        _cargando = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Registro - EnRuta'),
+        title: const Text('Registro'),
         backgroundColor: Colors.blue.shade900,
+        foregroundColor: Colors.white,
       ),
-      body: Container(
-        padding: EdgeInsets.all(24),
-        child: SingleChildScrollView(
-          child: Card(
-            elevation: 4,
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Icon(Icons.person_add, size: 60, color: Colors.blue),
-                  SizedBox(height: 20),
-
-                  // Mostrar error si existe
-                  if (_errorMessage != null)
-                    Container(
-                      padding: EdgeInsets.all(12),
-                      margin: EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade100,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.shade300),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            TextField(
+              controller: _nombreController,
+              decoration: const InputDecoration(
+                  labelText: 'Nombre', prefixIcon: Icon(Icons.person)),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                  labelText: 'Correo', prefixIcon: Icon(Icons.email)),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                  labelText: 'Contraseña', prefixIcon: Icon(Icons.lock)),
+            ),
+            const SizedBox(height: 20),
+            const Text('Tipo de cuenta:',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Row(
+              children: ['pasajero', 'chofer'].map((rol) {
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: ElevatedButton(
+                      onPressed: () => setState(() => _rolSeleccionado = rol),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _rolSeleccionado == rol
+                            ? Colors.blue.shade900
+                            : Colors.grey.shade300,
+                        foregroundColor: _rolSeleccionado == rol
+                            ? Colors.white
+                            : Colors.black,
                       ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.error, color: Colors.red.shade700),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              _errorMessage!,
-                              style: TextStyle(color: Colors.red.shade700),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  TextField(
-                    controller: nombreController,
-                    decoration: InputDecoration(
-                      labelText: 'Nombre completo',
-                      prefixIcon: Icon(Icons.person),
-                      border: OutlineInputBorder(),
+                      child: Text(rol[0].toUpperCase() + rol.substring(1)),
                     ),
                   ),
-                  SizedBox(height: 16),
-                  TextField(
-                    controller: emailController,
-                    decoration: InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email),
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  SizedBox(height: 16),
-                  TextField(
-                    controller: passwordController,
-                    decoration: InputDecoration(
-                      labelText: 'Contraseña (mínimo 6 caracteres)',
-                      prefixIcon: Icon(Icons.lock),
-                      border: OutlineInputBorder(),
-                    ),
-                    obscureText: true,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Registrarse como:',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: RadioListTile(
-                          title: Text('Pasajero'),
-                          value: 'pasajero',
-                          groupValue: rolSeleccionado,
-                          onChanged: (value) {
-                            setState(() {
-                              rolSeleccionado = value.toString();
-                              _errorMessage = null;
-                            });
-                          },
-                        ),
-                      ),
-                      Expanded(
-                        child: RadioListTile(
-                          title: Text('Chofer'),
-                          value: 'chofer',
-                          groupValue: rolSeleccionado,
-                          onChanged: (value) {
-                            setState(() {
-                              rolSeleccionado = value.toString();
-                              _errorMessage = null;
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 24),
-
-                  // Botón con estado de carga
-                  _isLoading
-                      ? Center(child: CircularProgressIndicator())
-                      : ElevatedButton(
-                    onPressed: _registrar,
-                    child: Text('Registrarse'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: Size(double.infinity, 50),
-                      backgroundColor: Colors.blue.shade900,
-                    ),
-                  ),
-
-                  SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: Text('¿Ya tienes cuenta? Inicia sesión'),
-                  ),
-                ],
+                );
+              }).toList(),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: const TextStyle(color: Colors.red)),
+            ],
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _cargando ? null : _registrar,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade900,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _cargando
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Crear cuenta',
+                    style: TextStyle(fontSize: 16, color: Colors.white)),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
-  }
-
-  Future<void> _registrar() async {
-    // Validaciones
-    if (nombreController.text.trim().isEmpty) {
-      setState(() {
-        _errorMessage = 'Por favor ingresa tu nombre';
-      });
-      return;
-    }
-
-    if (emailController.text.trim().isEmpty) {
-      setState(() {
-        _errorMessage = 'Por favor ingresa tu email';
-      });
-      return;
-    }
-
-    if (!emailController.text.contains('@')) {
-      setState(() {
-        _errorMessage = 'Ingresa un email válido';
-      });
-      return;
-    }
-
-    if (passwordController.text.length < 6) {
-      setState(() {
-        _errorMessage = 'La contraseña debe tener al menos 6 caracteres';
-      });
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final auth = context.read<AuthProvider>();
-      bool success = await auth.register(
-        emailController.text.trim(),
-        passwordController.text.trim(),
-        nombreController.text.trim(),
-        rolSeleccionado,
-      );
-
-      if (success) {
-        // Mostrar mensaje de éxito
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('¡Registro exitoso! Bienvenido ${nombreController.text}'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-
-        // Navegar según rol
-        if (rolSeleccionado == 'chofer') {
-          Navigator.pushReplacementNamed(context, '/chofer');
-        } else {
-          Navigator.pushReplacementNamed(context, '/pasajero');
-        }
-      } else {
-        setState(() {
-          _errorMessage = 'Error en el registro. El email podría estar en uso.';
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Error: ${e.toString()}';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    emailController.dispose();
-    passwordController.dispose();
-    nombreController.dispose();
-    super.dispose();
   }
 }

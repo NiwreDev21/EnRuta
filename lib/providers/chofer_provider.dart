@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/firebase_service.dart';
@@ -6,111 +8,118 @@ class ChoferProvider extends ChangeNotifier {
   final FirebaseService _firebaseService = FirebaseService();
 
   bool _jornadaActiva = false;
-  String _lineaSeleccionada = '';
-  bool _isLoading = false;
+  bool isLoading = false;
+  String _ultimaActualizacion = 'Esperando...';
+  String _errorGPS = '';
 
   bool get jornadaActiva => _jornadaActiva;
-  String get lineaSeleccionada => _lineaSeleccionada;
-  bool get isLoading => _isLoading;
-
-  void setLinea(String linea) {
-    _lineaSeleccionada = linea;
-    notifyListeners();
-  }
+  String get ultimaActualizacion => _ultimaActualizacion;
+  String get errorGPS => _errorGPS;
 
   Future<bool> iniciarJornada(String uid, String nombre, String linea) async {
-    if (linea.isEmpty) {
-      print('❌ No hay línea seleccionada');
-      return false;
-    }
+    if (linea.isEmpty) return false;
 
-    _isLoading = true;
+    isLoading = true;
+    _errorGPS = 'Iniciando...';
     notifyListeners();
 
     try {
-      // 1. Verificar GPS
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        print('❌ GPS desactivado');
-        _isLoading = false;
+      // 1. Permisos
+      LocationPermission permiso = await Geolocator.checkPermission();
+      if (permiso == LocationPermission.denied) {
+        permiso = await Geolocator.requestPermission();
+      }
+
+      if (permiso == LocationPermission.deniedForever) {
+        _errorGPS = 'Permisos denegados permanentemente';
+        isLoading = false;
         notifyListeners();
         return false;
       }
 
-      // 2. Solicitar permisos si es necesario
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          print('❌ Permisos denegados');
-          _isLoading = false;
+      // 2. Verificar GPS
+      bool gpsActivo = await Geolocator.isLocationServiceEnabled();
+      if (!gpsActivo) {
+        _errorGPS = 'Activando GPS...';
+        notifyListeners();
+        await Geolocator.openLocationSettings();
+        await Future.delayed(Duration(seconds: 3));
+
+        gpsActivo = await Geolocator.isLocationServiceEnabled();
+        if (!gpsActivo) {
+          _errorGPS = 'Activa el GPS manualmente';
+          isLoading = false;
           notifyListeners();
           return false;
         }
       }
 
-      if (permission == LocationPermission.deniedForever) {
-        print('❌ Permisos denegados permanentemente');
-        _isLoading = false;
-        notifyListeners();
-        return false;
-      }
-
-      // 3. Obtener ubicación inicial
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      print('📍 Ubicación inicial obtenida: ${position.latitude}, ${position.longitude}');
-
-      // 4. Iniciar jornada en Firebase (crear registro)
+      // 3. Iniciar jornada en Firebase
       await _firebaseService.iniciarJornada(uid, nombre, linea);
-
-      // 5. Guardar ubicación inicial
-      await _firebaseService.guardarUbicacionChofer(uid, position.latitude, position.longitude);
-
       _jornadaActiva = true;
 
-      // 6. Iniciar stream de ubicación continua
-      _startSendingLocation(uid);
+      // 4. INICIAR ENVÍO CONTINUO DE UBICACIÓN
+      _iniciarEnvioUbicacion(uid);
 
-      print('✅ Jornada iniciada correctamente');
+      _errorGPS = '✅ Compartiendo ubicación en tiempo real';
+      notifyListeners();
+
       return true;
     } catch (e) {
-      print('❌ Error en iniciarJornada: $e');
+      _errorGPS = 'Error: $e';
       return false;
     } finally {
-      _isLoading = false;
+      isLoading = false;
       notifyListeners();
     }
   }
 
-  void _startSendingLocation(String uid) {
-    // Configuración GPS optimizada
-    const LocationSettings settings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 5, // Actualizar cada 5 metros de movimiento
-      timeLimit: Duration(seconds: 3), // O cada 3 segundos
-    );
-
-    // Escuchar cambios de ubicación
-    Geolocator.getPositionStream(locationSettings: settings).listen((Position position) {
-      print('📍 Enviando ubicación en tiempo real: ${position.latitude}, ${position.longitude}');
+  void _iniciarEnvioUbicacion(String uid) {
+    // PRIMERO: Enviar ubicación inmediatamente
+    Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    ).then((position) {
       _firebaseService.guardarUbicacionChofer(uid, position.latitude, position.longitude);
-    }).onError((error) {
-      print('❌ Error en stream de ubicación: $error');
+      _actualizarTimestamp();
+      print('📍 Ubicación inicial enviada: ${position.latitude}, ${position.longitude}');
+    }).catchError((e) {
+      print('Error ubicación inicial: $e');
+    });
+
+    // SEGUNDO: Stream continuo cada 3 segundos
+    Timer.periodic(Duration(seconds: 3), (timer) async {
+      if (!_jornadaActiva) {
+        timer.cancel();
+        return;
+      }
+
+      try {
+        Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 3),
+        );
+
+        await _firebaseService.guardarUbicacionChofer(uid, position.latitude, position.longitude);
+        _actualizarTimestamp();
+        print('📍 Ubicación enviada cada 3s: ${position.latitude}, ${position.longitude}');
+      } catch (e) {
+        print('Error enviando ubicación: $e');
+      }
     });
   }
 
-  Future<void> terminarJornada(String uid) async {
-    _jornadaActiva = false;
-    await _firebaseService.terminarJornada(uid);
+  void _actualizarTimestamp() {
+    final now = DateTime.now();
+    _ultimaActualizacion = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     notifyListeners();
-    print('✅ Jornada terminada');
   }
 
-  @override
-  void dispose() {
-    super.dispose();
+  Future<void> terminarJornada(String uid) async {
+    await _firebaseService.terminarJornada(uid);
+    _jornadaActiva = false;
+    _ultimaActualizacion = 'Jornada terminada';
+    _errorGPS = '';
+    notifyListeners();
+    print('✅ Jornada terminada');
   }
 }

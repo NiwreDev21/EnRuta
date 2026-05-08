@@ -12,8 +12,8 @@ class MapaProvider extends ChangeNotifier {
   }
 
   void iniciarStream() {
-    print('🟢 Iniciando stream de choferes desde MapaProvider');
-    _firebaseService.getChoferesActivosStream().listen((choferes) {
+    print('🟢 Iniciando stream de choferes');
+    _firebaseService.getChoferesActivos().listen((choferes) {
       print('🟢 Recibidos ${choferes.length} choferes');
       _choferes = choferes;
       notifyListeners();
@@ -23,18 +23,5 @@ class MapaProvider extends ChangeNotifier {
   void filtrarPorLinea(String? linea) {
     _filtroLinea = linea;
     notifyListeners();
-  }
-
-  void refresh() {
-    notifyListeners();
-  }
-
-  void setMapController(dynamic controller) {
-    // Método requerido por mapa_widget
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 }

@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
+
   firebase_auth.User? _user;
   String? _rol;
 
@@ -18,6 +19,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // LOGIN
   Future<bool> login(String email, String password) async {
     try {
       final user = await _authService.login(email, password);
@@ -29,11 +31,12 @@ class AuthProvider extends ChangeNotifier {
       }
       return false;
     } catch (e) {
-      print('Error en login provider: $e');
+      print('Error en login: $e');
       return false;
     }
   }
 
+  // REGISTRO
   Future<bool> register(String email, String password, String nombre, String rol) async {
     try {
       final user = await _authService.register(email, password, nombre, rol);
@@ -45,11 +48,12 @@ class AuthProvider extends ChangeNotifier {
       }
       return false;
     } catch (e) {
-      print('Error en registro provider: $e');
+      print('Error en registro: $e');
       return false;
     }
   }
 
+  // LOGOUT
   Future<void> logout() async {
     await _authService.logout();
     _user = null;
@@ -57,10 +61,10 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Cargar rol del usuario
   Future<void> _cargarRol() async {
     if (_user != null) {
       _rol = await _authService.getRolUsuario(_user!.uid);
-      print('Rol cargado: $_rol para usuario ${_user!.email}');
       notifyListeners();
     }
   }

@@ -5,6 +5,39 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseService _firebaseService = FirebaseService();
 
+  // Obtener usuario actual
+  User? getCurrentUser() {
+    return _auth.currentUser;
+  }
+
+  // Auto login
+  Future<User?> autoLogin(String email, String password) async {
+    try {
+      UserCredential result = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      return result.user;
+    } catch (e) {
+      print('Auto login falló: $e');
+      return null;
+    }
+  }
+
+  // Login normal
+  Future<User?> login(String email, String password) async {
+    try {
+      UserCredential result = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      return result.user;
+    } catch (e) {
+      print('Login falló: $e');
+      return null;
+    }
+  }
+
   // Registrar usuario
   Future<User?> register(String email, String password, String nombre, String rol) async {
     try {
@@ -14,28 +47,13 @@ class AuthService {
       );
 
       await result.user?.updateDisplayName(nombre);
-      await result.user?.sendEmailVerification();
 
       // Guardar rol en Firebase Database
       await _firebaseService.guardarRolUsuario(result.user!.uid, rol, nombre);
 
       return result.user;
     } catch (e) {
-      print('Error en registro: $e');
-      return null;
-    }
-  }
-
-  // Login
-  Future<User?> login(String email, String password) async {
-    try {
-      UserCredential result = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      return result.user;
-    } catch (e) {
-      print('Error en login: $e');
+      print('Registro falló: $e');
       return null;
     }
   }
@@ -45,13 +63,13 @@ class AuthService {
     await _auth.signOut();
   }
 
-  // Obtener usuario actual
-  User? getCurrentUser() {
-    return _auth.currentUser;
-  }
-
   // Obtener rol del usuario
   Future<String> getRolUsuario(String uid) async {
-    return await _firebaseService.getRolUsuario(uid);
+    try {
+      return await _firebaseService.getRolUsuario(uid);
+    } catch (e) {
+      print('Error obteniendo rol: $e');
+      return 'pasajero';
+    }
   }
 }

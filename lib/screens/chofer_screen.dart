@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:geolocator/geolocator.dart';
 import '../providers/auth_provider.dart';
 import '../providers/chofer_provider.dart';
-import '../widgets/selector_linea.dart';
 
 class ChoferScreen extends StatefulWidget {
   @override
@@ -11,147 +9,8 @@ class ChoferScreen extends StatefulWidget {
 }
 
 class _ChoferScreenState extends State<ChoferScreen> {
-  final List<String> lineas = ['Línea 1', 'Línea 2', 'Línea 3', 'Línea 4', 'Línea 5'];
+  final List<String> lineas = ['Línea 1', 'Línea 2'];
   String _lineaSeleccionada = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _verificarPermisosAlInicio();
-  }
-
-  Future<void> _verificarPermisosAlInicio() async {
-    // Solicitar permisos al iniciar la app
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      _mostrarDialogGPS();
-    }
-  }
-
-  void _mostrarDialogGPS() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('GPS Desactivado'),
-        content: Text('Para compartir tu ubicación, necesitas activar el GPS'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Entendido'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // MÉTODO PRINCIPAL - INICIAR JORNADA
-  Future<void> _iniciarJornada(AuthProvider auth, ChoferProvider choferProvider) async {
-    if (_lineaSeleccionada.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Selecciona una línea primero')),
-      );
-      return;
-    }
-
-    // Verificar GPS
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('GPS Desactivado'),
-          content: Text('Para compartir tu ubicación, necesitas activar el GPS'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Entendido'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    // Verificar permisos
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Permisos denegados permanentemente. Ve a ajustes de la app.')),
-      );
-      return;
-    }
-
-    // Mostrar diálogo de carga
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Obteniendo ubicación...'),
-          ],
-        ),
-      ),
-    );
-
-    bool exito = await choferProvider.iniciarJornada(
-      auth.user!.uid,
-      auth.user!.displayName ?? 'Chofer',
-      _lineaSeleccionada,
-    );
-
-    Navigator.pop(context); // Cerrar diálogo
-
-    if (exito) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ Jornada iniciada - Compartiendo ubicación en tiempo real')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error al iniciar jornada. Verifica el GPS y los permisos.')),
-      );
-    }
-  }
-
-  Future<void> _terminarJornada(AuthProvider auth, ChoferProvider choferProvider) async {
-    // Confirmar
-    bool? confirmar = await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Terminar Jornada'),
-        content: Text('¿Estás seguro de que quieres terminar la jornada?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Terminar', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar == true) {
-      await choferProvider.terminarJornada(auth.user!.uid);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Jornada terminada')),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,44 +39,118 @@ class _ChoferScreenState extends State<ChoferScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Info usuario
             Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: EdgeInsets.all(16),
-                child: Column(
+                child: Row(
                   children: [
-                    Icon(Icons.directions_bus, size: 50, color: Colors.blue.shade900),
-                    SizedBox(height: 8),
-                    Text(
-                      'Bienvenido, ${auth.user?.displayName ?? "Chofer"}',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    Icon(Icons.person, size: 40, color: Colors.blue.shade900),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(auth.user?.displayName ?? 'Chofer',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text(auth.user?.email ?? '', style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
                     ),
-                    SizedBox(height: 4),
-                    Text(
-                      'ID: ${auth.user?.uid.substring(0, 8)}...',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
+                    if (choferProvider.jornadaActiva)
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text('EN VIVO', style: TextStyle(color: Colors.white, fontSize: 10)),
+                      ),
                   ],
                 ),
               ),
             ),
+
             SizedBox(height: 20),
-            Text(
-              'Selecciona tu línea:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+
+            // Selección de línea
+            Text('Línea:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            Row(
+              children: lineas.map((linea) => Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: ElevatedButton(
+                    onPressed: choferProvider.jornadaActiva ? null : () => setState(() => _lineaSeleccionada = linea),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _lineaSeleccionada == linea ? Colors.blue.shade900 : Colors.grey.shade200,
+                      foregroundColor: _lineaSeleccionada == linea ? Colors.white : Colors.black,
+                    ),
+                    child: Text(linea),
+                  ),
+                ),
+              )).toList(),
             ),
-            SizedBox(height: 10),
-            SelectorLinea(
-              lineas: lineas,
-              onLineaSeleccionada: (linea) {
-                setState(() {
-                  _lineaSeleccionada = linea;
-                });
-                choferProvider.setLinea(linea);
-              },
+
+            SizedBox(height: 20),
+
+            // Estado GPS
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: choferProvider.jornadaActiva ? Colors.green.shade50 : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: choferProvider.jornadaActiva ? Colors.green : Colors.grey),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(choferProvider.jornadaActiva ? Icons.gps_fixed : Icons.gps_off,
+                          color: choferProvider.jornadaActiva ? Colors.green : Colors.grey,
+                          size: 30),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          choferProvider.jornadaActiva
+                              ? '📍 Compartiendo ubicación EN VIVO'
+                              : '⚡ Presiona "Iniciar Jornada"',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (choferProvider.jornadaActiva) ...[
+                    SizedBox(height: 8),
+                    Divider(),
+                    Row(
+                      children: [
+                        Icon(Icons.timer, size: 14, color: Colors.green),
+                        SizedBox(width: 8),
+                        Text('Actualización: ', style: TextStyle(fontSize: 12)),
+                        Text(choferProvider.ultimaActualizacion,
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green)),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Icon(Icons.sync, size: 14, color: Colors.green),
+                        SizedBox(width: 8),
+                        Text('Stream GPS activo - Actualizando cada 2 segundos',
+                            style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                  if (choferProvider.errorGPS.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(choferProvider.errorGPS, style: TextStyle(fontSize: 12, color: Colors.orange)),
+                    ),
+                ],
+              ),
             ),
-            SizedBox(height: 30),
+
+            SizedBox(height: 24),
 
             // Botón principal
             SizedBox(
@@ -226,68 +159,78 @@ class _ChoferScreenState extends State<ChoferScreen> {
                 onPressed: choferProvider.isLoading
                     ? null
                     : choferProvider.jornadaActiva
-                    ? () => _terminarJornada(auth, choferProvider)
-                    : () => _iniciarJornada(auth, choferProvider),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: choferProvider.isLoading
-                      ? CircularProgressIndicator(color: Colors.white)
-                      : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(choferProvider.jornadaActiva ? Icons.stop : Icons.play_arrow, size: 30),
-                      SizedBox(width: 10),
-                      Text(
-                        choferProvider.jornadaActiva ? 'TERMINAR JORNADA' : 'INICIAR JORNADA',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
+                    ? () async {
+                  bool confirm = await showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text('Terminar Jornada'),
+                      content: Text('¿Dejar de compartir tu ubicación?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Cancelar')),
+                        TextButton(onPressed: () => Navigator.pop(context, true),
+                            child: Text('Terminar', style: TextStyle(color: Colors.red))),
+                      ],
+                    ),
+                  ) ?? false;
+
+                  if (confirm) {
+                    await choferProvider.terminarJornada(auth.user!.uid);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Dejaste de compartir ubicación'), backgroundColor: Colors.orange));
+                  }
+                }
+                    : () async {
+                  if (_lineaSeleccionada.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Selecciona una línea'), backgroundColor: Colors.orange));
+                    return;
+                  }
+
+                  bool exito = await choferProvider.iniciarJornada(
+                    auth.user!.uid,
+                    auth.user!.displayName ?? 'Chofer',
+                    _lineaSeleccionada,
+                  );
+
+                  if (exito) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('✅ Compartiendo ubicación en tiempo real'), backgroundColor: Colors.green));
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('❌ Error al iniciar'), backgroundColor: Colors.red));
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: choferProvider.jornadaActiva ? Colors.red : Colors.green,
-                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
+                child: choferProvider.isLoading
+                    ? CircularProgressIndicator(color: Colors.white)
+                    : Text(choferProvider.jornadaActiva ? 'TERMINAR JORNADA' : 'INICIAR JORNADA',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
 
-            if (choferProvider.jornadaActiva) ...[
-              SizedBox(height: 20),
+            SizedBox(height: 16),
+
+            if (!choferProvider.jornadaActiva)
               Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade100,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green.shade300),
-                ),
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
                 child: Row(
                   children: [
-                    Icon(Icons.gps_fixed, color: Colors.green.shade700, size: 30),
-                    SizedBox(width: 16),
+                    Icon(Icons.info, size: 16, color: Colors.blue),
+                    SizedBox(width: 8),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '📍 Compartiendo ubicación',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green.shade900,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Línea: $_lineaSeleccionada',
-                            style: TextStyle(fontSize: 12, color: Colors.green.shade800),
-                          ),
-                        ],
+                      child: Text(
+                        'Al iniciar jornada, tu ubicación se compartirá en tiempo real.',
+                        style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
           ],
         ),
       ),

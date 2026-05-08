@@ -2,7 +2,7 @@ import 'package:geolocator/geolocator.dart';
 
 class UbicacionService {
   static const int INTERVALO_ACTUALIZACION = 3000; // 3 segundos
-  static const int DISTANCIA_MINIMA = 5; // 5 metros
+  static const int DISTANCIA_MINIMA = 2; // 2 metros
 
   Position? _currentPosition;
   Stream<Position>? _positionStream;
@@ -48,7 +48,7 @@ class UbicacionService {
   Stream<Position> iniciarStreamUbicacion() {
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.bestForNavigation, // Mejor para vehículos
-      distanceFilter: DISTANCIA_MINIMA, // No actualizar si no se mueve 5m
+      distanceFilter: DISTANCIA_MINIMA, // No actualizar si no se mueve 2m
       timeLimit: Duration(milliseconds: INTERVALO_ACTUALIZACION),
     );
 
