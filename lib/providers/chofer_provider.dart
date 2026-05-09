@@ -1,8 +1,9 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/firebase_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ChoferProvider extends ChangeNotifier {
   final FirebaseService _firebaseService = FirebaseService();
@@ -11,6 +12,8 @@ class ChoferProvider extends ChangeNotifier {
   bool isLoading = false;
   String _ultimaActualizacion = 'Esperando...';
   String _errorGPS = '';
+  StreamSubscription<Position>? _ubicacionSubscription;
+  Timer? _timerFuerzaBruta;
 
   bool get jornadaActiva => _jornadaActiva;
   String get ultimaActualizacion => _ultimaActualizacion;
@@ -20,11 +23,18 @@ class ChoferProvider extends ChangeNotifier {
     if (linea.isEmpty) return false;
 
     isLoading = true;
-    _errorGPS = 'Iniciando...';
+    _errorGPS = 'Iniciando GPS...';
     notifyListeners();
 
     try {
-      // 1. Permisos
+      // Guardar estado en shared preferences para persistencia
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('jornada_activa', true);
+      await prefs.setString('jornada_uid', uid);
+      await prefs.setString('jornada_nombre', nombre);
+      await prefs.setString('jornada_linea', linea);
+
+      // Permisos
       LocationPermission permiso = await Geolocator.checkPermission();
       if (permiso == LocationPermission.denied) {
         permiso = await Geolocator.requestPermission();
@@ -37,14 +47,13 @@ class ChoferProvider extends ChangeNotifier {
         return false;
       }
 
-      // 2. Verificar GPS
+      // Activar GPS
       bool gpsActivo = await Geolocator.isLocationServiceEnabled();
       if (!gpsActivo) {
         _errorGPS = 'Activando GPS...';
         notifyListeners();
         await Geolocator.openLocationSettings();
         await Future.delayed(Duration(seconds: 3));
-
         gpsActivo = await Geolocator.isLocationServiceEnabled();
         if (!gpsActivo) {
           _errorGPS = 'Activa el GPS manualmente';
@@ -54,14 +63,17 @@ class ChoferProvider extends ChangeNotifier {
         }
       }
 
-      // 3. Iniciar jornada en Firebase
+      // Iniciar jornada en Firebase
       await _firebaseService.iniciarJornada(uid, nombre, linea);
       _jornadaActiva = true;
 
-      // 4. INICIAR ENVÍO CONTINUO DE UBICACIÓN
-      _iniciarEnvioUbicacion(uid);
+      // INICIAR TRACKING (MÉTODO 1: Stream continuo)
+      _iniciarStreamUbicacion(uid);
 
-      _errorGPS = '✅ Compartiendo ubicación en tiempo real';
+      // MÉTODO 2: Timer de fuerza bruta como respaldo
+      _iniciarTimerFuerzaBruta(uid);
+
+      _errorGPS = '✅ Compartiendo ubicación las 24h';
       notifyListeners();
 
       return true;
@@ -74,20 +86,26 @@ class ChoferProvider extends ChangeNotifier {
     }
   }
 
-  void _iniciarEnvioUbicacion(String uid) {
-    // PRIMERO: Enviar ubicación inmediatamente
-    Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    ).then((position) {
-      _firebaseService.guardarUbicacionChofer(uid, position.latitude, position.longitude);
-      _actualizarTimestamp();
-      print('📍 Ubicación inicial enviada: ${position.latitude}, ${position.longitude}');
-    }).catchError((e) {
-      print('Error ubicación inicial: $e');
-    });
+  void _iniciarStreamUbicacion(String uid) {
+    const settings = LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 2,  // Cada 2 metros
+      timeLimit: Duration(seconds: 1),  // Cada 1 segundo
+    );
 
-    // SEGUNDO: Stream continuo cada 3 segundos
-    Timer.periodic(Duration(seconds: 3), (timer) async {
+    _ubicacionSubscription = Geolocator.getPositionStream(
+      locationSettings: settings,
+    ).listen((Position position) {
+      _enviarUbicacion(uid, position);
+    }, onError: (error) {
+      print('Error stream: $error');
+    });
+  }
+
+  void _iniciarTimerFuerzaBruta(String uid) {
+    // Timer que fuerza la actualización cada 2 segundos
+    // Esto asegura que aunque el stream falle, SIGA actualizando
+    _timerFuerzaBruta = Timer.periodic(Duration(seconds: 2), (timer) async {
       if (!_jornadaActiva) {
         timer.cancel();
         return;
@@ -95,31 +113,51 @@ class ChoferProvider extends ChangeNotifier {
 
       try {
         Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 3),
+          desiredAccuracy: LocationAccuracy.bestForNavigation,
         );
-
-        await _firebaseService.guardarUbicacionChofer(uid, position.latitude, position.longitude);
-        _actualizarTimestamp();
-        print('📍 Ubicación enviada cada 3s: ${position.latitude}, ${position.longitude}');
+        _enviarUbicacion(uid, position);
       } catch (e) {
-        print('Error enviando ubicación: $e');
+        print('Error timer fuerza bruta: $e');
       }
     });
   }
 
-  void _actualizarTimestamp() {
+  void _enviarUbicacion(String uid, Position position) {
+    _firebaseService.guardarUbicacionChofer(uid, position.latitude, position.longitude);
+
     final now = DateTime.now();
     _ultimaActualizacion = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     notifyListeners();
+
+    print('📍 GPS ENVÍO: ${position.latitude}, ${position.longitude} - $_ultimaActualizacion');
   }
 
   Future<void> terminarJornada(String uid) async {
+    // Detener todo
+    await _ubicacionSubscription?.cancel();
+    _ubicacionSubscription = null;
+    _timerFuerzaBruta?.cancel();
+    _timerFuerzaBruta = null;
+
+    // Limpiar shared preferences
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('jornada_activa');
+    await prefs.remove('jornada_uid');
+
     await _firebaseService.terminarJornada(uid);
+
     _jornadaActiva = false;
     _ultimaActualizacion = 'Jornada terminada';
     _errorGPS = '';
     notifyListeners();
+
     print('✅ Jornada terminada');
+  }
+
+  @override
+  void dispose() {
+    _ubicacionSubscription?.cancel();
+    _timerFuerzaBruta?.cancel();
+    super.dispose();
   }
 }

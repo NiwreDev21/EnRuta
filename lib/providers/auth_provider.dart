@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import 'chofer_provider.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -68,4 +70,22 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+  //Agregar al AuthProvider
+  Future<void> recuperarJornadaPasada() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jornadaActiva = prefs.getBool('jornada_activa') ?? false;
+
+    if (jornadaActiva) {
+      final uid = prefs.getString('jornada_uid');
+      final nombre = prefs.getString('jornada_nombre');
+      final linea = prefs.getString('jornada_linea');
+
+      if (uid != null && nombre != null && linea != null) {
+        print('🔄 Recuperando jornada pasada para $nombre');
+        final choferProvider = ChoferProvider();
+        await choferProvider.iniciarJornada(uid, nombre, linea);
+      }
+    }
+  }
 }
+

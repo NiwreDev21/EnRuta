@@ -10,7 +10,7 @@ plugins {
 
 android {
     namespace = "com.example.enruta_app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36  // Fijar a 34 para mejor compatibilidad
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -23,20 +23,18 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.enruta_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdk = flutter.minSdkVersion  // Aumentado para mejor soporte de GPS en segundo plano
+        targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Configuración adicional para GPS
+        manifestPlaceholders["appAuthRedirectScheme"] = "enruta"
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -44,4 +42,10 @@ android {
 
 flutter {
     source = "../.."
+}
+
+// Dependencias adicionales para GPS en segundo plano
+dependencies {
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("androidx.work:work-runtime:2.8.1")
 }
